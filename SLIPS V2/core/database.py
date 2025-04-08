@@ -11,6 +11,7 @@ import time
 import logging
 import redis
 import subprocess
+import os
 from typing import Dict, List, Any, Optional, Union
 
 class Database:
@@ -37,13 +38,81 @@ class Database:
             'shutdown'
         ]
         
+        # First, try to fix or restart an existing problematic Redis server
+        self._fix_redis_server()
+        
         # Connect to Redis
         self._connect()
+
+    def _fix_redis_server(self) -> None:
+        """Attempt to fix a potentially problematic Redis server"""
+        try:
+            # First try to connect
+            test_client = redis.Redis(
+                host='localhost',
+                port=self.port,
+                db=self.db_name,
+                socket_timeout=2
+            )
+            
+            try:
+                # Try a ping - if this succeeds, Redis is running
+                test_client.ping()
+                # Try to fix the configuration
+                try:
+                    test_client.config_set('stop-writes-on-bgsave-error', 'no')
+                    self.logger.info("Successfully configured existing Redis server")
+                    test_client.close()
+                    return
+                except Exception:
+                    # Can't reconfigure, need to restart
+                    self.logger.info("Couldn't reconfigure Redis, attempting restart")
+            except Exception:
+                # Redis is not responding, may need to be started
+                self.logger.info("Redis server not responding, will start a new one")
+            
+            # Try to gracefully shut down any existing Redis instance
+            try:
+                subprocess.run(
+                    ['redis-cli', '-p', str(self.port), 'shutdown'],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    timeout=3
+                )
+                time.sleep(1)  # Give Redis time to shut down
+                self.logger.info("Successfully shut down existing Redis server")
+            except Exception as e:
+                self.logger.warning(f"Could not shut down Redis: {str(e)}")
+            
+            # Force kill any remaining Redis processes on this port
+            try:
+                # Find any process listening on our port
+                cmd = f"lsof -i :{self.port} -t"
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                pids = result.stdout.strip().split("\n")
+                
+                for pid in pids:
+                    if pid:
+                        try:
+                            # Kill the process
+                            subprocess.run(['kill', '-9', pid], check=False)
+                            self.logger.info(f"Killed Redis process with PID {pid}")
+                        except Exception:
+                            pass
+                time.sleep(1)  # Give processes time to die
+            except Exception as e:
+                self.logger.warning(f"Error killing Redis processes: {str(e)}")
+            
+        except Exception as e:
+            self.logger.error(f"Error fixing Redis server: {str(e)}")
 
     def _connect(self) -> None:
         """Connect to Redis database, start server if not running"""
         try:
-            # Try to connect to existing Redis server
+            # Start a new Redis server with correct configuration
+            self._start_redis_server()
+            
+            # Try to connect again
             self.redis_client = redis.Redis(
                 host='localhost',
                 port=self.port,
@@ -52,50 +121,47 @@ class Database:
             )
             self.redis_client.ping()  # Test connection
             self.logger.info(f"Connected to Redis server on port {self.port}")
-            
-            # Disable RDB persistence if causing issues
-            try:
-                # Change configuration to allow writes even if RDB save fails
-                self.redis_client.config_set('stop-writes-on-bgsave-error', 'no')
-                self.logger.info("Set Redis to continue accepting writes even if RDB save fails")
                 
-                # You could also disable RDB persistence entirely if needed
-                # self.redis_client.config_set('save', '')
-            except redis.exceptions.ResponseError as e:
-                self.logger.warning(f"Could not modify Redis configuration: {str(e)}")
+            # Initialize pubsub client
+            self.pubsub = self.redis_client.pubsub(ignore_subscribe_messages=True)
             
-        except (redis.ConnectionError, redis.TimeoutError):
-            self.logger.info(f"Redis server not running on port {self.port}, starting new instance")
-            self._start_redis_server()
-            
-        # Initialize pubsub client
-        self.pubsub = self.redis_client.pubsub(ignore_subscribe_messages=True)
+        except Exception as e:
+            self.logger.error(f"Failed to connect to Redis: {str(e)}")
+            raise
             
     def _start_redis_server(self) -> None:
         """Start a Redis server instance"""
         try:
-            # Start Redis server with configuration to avoid persistence issues
-            cmd = [
-                'redis-server', 
-                '--port', str(self.port), 
-                '--daemonize', 'yes',
-                '--save', '""',  # Disable RDB persistence
-                '--stop-writes-on-bgsave-error', 'no'  # Allow writes even if RDB save fails
-            ]
+            # Create a temporary Redis config file
+            temp_config = f"/tmp/redis_{self.port}.conf"
+            with open(temp_config, 'w') as f:
+                f.write(f"""
+                port {self.port}
+                daemonize yes
+                save ""
+                stop-writes-on-bgsave-error no
+                """)
+            
+            # Start Redis with our config file
+            cmd = ['redis-server', temp_config]
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
             # Wait for server to start
             max_retries = 5
             for i in range(max_retries):
                 try:
-                    self.redis_client = redis.Redis(
+                    client = redis.Redis(
                         host='localhost',
                         port=self.port,
                         db=self.db_name,
-                        socket_timeout=5
+                        socket_timeout=2
                     )
-                    self.redis_client.ping()
+                    client.ping()
+                    client.close()
                     self.logger.info(f"Redis server started on port {self.port}")
+                    
+                    # Clean up config file
+                    os.remove(temp_config)
                     return
                 except (redis.ConnectionError, redis.TimeoutError):
                     time.sleep(1)
