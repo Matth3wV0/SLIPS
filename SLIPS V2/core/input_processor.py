@@ -180,7 +180,8 @@ class InputProcessor:
                 # Publish the flow to Redis
                 self.db.publish('new_flow', {
                     'flow': flow,
-                    'timestamp': flow.get('timestamp', time.time())
+                    'timestamp': flow.get('timestamp', time.time()),
+                    'twid': f"timewindow{int(float(flow.get('timestamp', time.time())) // 3600)}"
                 })
                 
         except json.JSONDecodeError:
@@ -212,11 +213,11 @@ class InputProcessor:
                 'id.resp_p': event.get('dest_port', 0),
                 'proto': event.get('proto', '').lower(),
                 'service': event.get('app_proto', ''),
-                'duration': event.get('flow', {}).get('duration', 0),
-                'orig_bytes': event.get('flow', {}).get('bytes_toserver', 0),
-                'resp_bytes': event.get('flow', {}).get('bytes_toclient', 0),
+                'duration': float(event.get('flow', {}).get('duration', 0)),
+                'orig_bytes': int(event.get('flow', {}).get('bytes_toserver', 0)),
+                'resp_bytes': int(event.get('flow', {}).get('bytes_toclient', 0)),
                 'conn_state': event.get('flow', {}).get('state', ''),
-                'timestamp': event.get('timestamp', time.time())
+                'timestamp': float(event.get('timestamp', time.time()))
             }
             
             # Add additional fields if available

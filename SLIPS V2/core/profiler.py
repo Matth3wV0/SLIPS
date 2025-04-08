@@ -10,7 +10,7 @@ import time
 import json
 import logging
 import ipaddress
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set, Union
 from multiprocessing.managers import ValueProxy
 
 
@@ -91,7 +91,7 @@ class Profiler:
             return
             
         flow = data['flow']
-        timestamp = data.get('timestamp', time.time())
+        timestamp = float(data.get('timestamp', time.time()))
         
         # Get source and destination IPs
         src_ip = flow.get('id.orig_h')
@@ -122,8 +122,13 @@ class Profiler:
             True if internal, False otherwise
         """
         try:
-            ip_obj = ipaddress.ip_address(ip)
-            return ip_obj.is_private
+            # Handle IPv6 addresses
+            if ':' in ip:
+                ip_obj = ipaddress.IPv6Address(ip)
+                return ip_obj.is_private or ip_obj.is_link_local
+            else:
+                ip_obj = ipaddress.IPv4Address(ip)
+                return ip_obj.is_private
         except (ValueError, TypeError):
             return False
 
@@ -174,7 +179,7 @@ class Profiler:
                 'bytes_out': 0,
                 'protocols': {},
                 'ports': {},
-                'connected_ips': set(),
+                'connected_ips': [],  # Initialize as list, not set
                 'threat_level': 'info',
                 'confidence': 0.0,
                 'is_internal': self._is_internal_ip(ip)
@@ -200,7 +205,9 @@ class Profiler:
             Tuple of (timewindow_id, timewindow_data)
         """
         # Calculate timewindow ID based on timestamp
-        tw_number = int(timestamp // self.timewindow_width)
+        # Ensure timestamp is a float before division
+        timestamp_float = float(timestamp)
+        tw_number = int(timestamp_float // self.timewindow_width)
         tw_id = f"timewindow{tw_number}"
         
         # Try to get existing timewindow
@@ -220,7 +227,7 @@ class Profiler:
                 'bytes_out': 0,
                 'protocols': {},
                 'ports': {},
-                'connected_ips': set(),
+                'connected_ips': [],  # Initialize as list, not set
                 'threat_level': 'info',
                 'confidence': 0.0
             }
@@ -283,12 +290,8 @@ class Profiler:
         else:
             connected_ip = flow.get('id.orig_h')
             
-        if connected_ip and isinstance(timewindow['connected_ips'], set):
-            timewindow['connected_ips'].add(connected_ip)
-        
-        # Convert set to list for JSON serialization
-        if isinstance(timewindow['connected_ips'], set):
-            timewindow['connected_ips'] = list(timewindow['connected_ips'])
+        if connected_ip and connected_ip not in timewindow['connected_ips']:
+            timewindow['connected_ips'].append(connected_ip)
         
         # Update timewindow in database
         self.db.set_timewindow(ip, tw_id, timewindow)
@@ -354,13 +357,9 @@ class Profiler:
             
         if connected_ip:
             if 'connected_ips' not in profile:
-                profile['connected_ips'] = set()
-            if isinstance(profile['connected_ips'], set):
-                profile['connected_ips'].add(connected_ip)
-        
-        # Convert set to list for JSON serialization
-        if 'connected_ips' in profile and isinstance(profile['connected_ips'], set):
-            profile['connected_ips'] = list(profile['connected_ips'])
+                profile['connected_ips'] = []
+            if connected_ip not in profile['connected_ips']:  # Check before adding
+                profile['connected_ips'].append(connected_ip)
         
         # Update profile in database
         self.db.set_profile(ip, profile)
