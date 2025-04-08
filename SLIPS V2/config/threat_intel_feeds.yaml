@@ -1,0 +1,119 @@
+# Threat Intelligence Feeds Configuration
+
+# IP Feeds - Lists of malicious IP addresses
+ip_feeds:
+  # Blocklist.de - All IP addresses that have attacked others
+  - name: Blocklist.de All
+    url: https://lists.blocklist.de/lists/all.txt
+    type: ip
+    threat_level: 0.6
+    category: ["attack", "brute-force"]
+    enabled: true
+    
+  # Emerging Threats - Known compromised hosts
+  - name: Emerging Threats Compromised
+    url: https://rules.emergingthreats.net/blockrules/compromised-ips.txt
+    type: ip
+    threat_level: 0.7
+    category: ["compromised", "malware"]
+    enabled: true
+    
+  # AbuseIPDB - Reported malicious IPs
+  - name: AbuseIPDB Blacklist
+    url: https://feodotracker.abuse.ch/downloads/ipblocklist.txt
+    type: ip
+    threat_level: 0.8
+    category: ["botnet", "c2"]
+    enabled: true
+    
+  # Tor Exit Nodes
+  - name: Tor Exit Nodes
+    url: https://check.torproject.org/exit-addresses
+    type: ip
+    threat_level: 0.4  # Lower threat level because Tor isn't inherently malicious
+    category: ["anonymizer", "tor"]
+    enabled: true
+    
+  # VoIP Abuse Project
+  - name: VoIP Abuse
+    url: https://voipbl.org/update/
+    type: ip
+    threat_level: 0.5
+    category: ["voip", "abuse"]
+    enabled: true
+
+# Domain Feeds - Lists of malicious domains
+domain_feeds:
+  # Malware Domains
+  - name: Malware Domains
+    url: https://mirror1.malwaredomains.com/files/justdomains
+    type: domain
+    threat_level: 0.7
+    category: ["malware"]
+    enabled: true
+    
+  # PhishTank - Phishing domains
+  - name: PhishTank
+    url: https://data.phishtank.com/data/online-valid.csv
+    type: domain
+    threat_level: 0.7
+    category: ["phishing"]
+    enabled: true
+    
+  # URLhaus - Malware distribution
+  - name: URLhaus
+    url: https://urlhaus.abuse.ch/downloads/text/
+    type: domain
+    threat_level: 0.8
+    category: ["malware", "distribution"]
+    enabled: true
+    
+  # OpenPhish - Phishing domains
+  - name: OpenPhish
+    url: https://openphish.com/feed.txt
+    type: domain
+    threat_level: 0.7
+    category: ["phishing"]
+    enabled: true
+    
+  # DShield Suspicious Domains
+  - name: DShield Suspicious
+    url: https://www.dshield.org/feeds/suspiciousdomains_Low.txt
+    type: domain
+    threat_level: 0.5
+    category: ["suspicious"]
+    enabled: true
+
+# JA3 Fingerprint Feeds - SSL/TLS client fingerprints
+ja3_feeds:
+  # Abuse.ch JA3 Fingerprints
+  - name: Abuse.ch JA3
+    url: https://sslbl.abuse.ch/blacklist/ja3_fingerprints.csv
+    type: ja3
+    threat_level: 0.8
+    category: ["malware", "botnet"]
+    enabled: true
+
+# SSL Certificate Feeds - Malicious SSL certificates
+ssl_feeds:
+  # Abuse.ch SSL Blacklist
+  - name: Abuse.ch SSL
+    url: https://sslbl.abuse.ch/blacklist/sslblacklist.csv
+    type: ssl
+    threat_level: 0.8
+    category: ["malware", "botnet"]
+    enabled: true
+
+# Local Threat Intelligence - Custom entries
+local_intelligence:
+  # Local IP blacklist
+  ip_file: data/threat_intel/local_ip_blacklist.csv
+  
+  # Local domain blacklist
+  domain_file: data/threat_intel/local_domain_blacklist.csv
+  
+  # Local JA3 blacklist
+  ja3_file: data/threat_intel/local_ja3_blacklist.csv
+  
+  # Local SSL certificate blacklist
+  ssl_file: data/threat_intel/local_ssl_blacklist.csv

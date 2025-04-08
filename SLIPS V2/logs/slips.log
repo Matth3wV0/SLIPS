@@ -1,0 +1,6 @@
+2025-04-08 20:32:43,893 - root - INFO - Starting SLIPS Simplified
+2025-04-08 20:32:48,012 - Database - INFO - Redis server not running on port 6379, starting new instance
+2025-04-08 20:32:48,018 - Database - ERROR - Failed to start Redis server: [WinError 2] The system cannot find the file specified
+2025-04-08 20:33:17,474 - root - INFO - Starting SLIPS Simplified
+2025-04-08 20:33:21,601 - Database - INFO - Redis server not running on port 6379, starting new instance
+2025-04-08 20:33:21,607 - Database - ERROR - Failed to start Redis server: [WinError 2] The system cannot find the file specified

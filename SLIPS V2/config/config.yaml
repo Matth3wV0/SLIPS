@@ -1,0 +1,154 @@
+# SLIPS Simplified Configuration File
+
+# General settings
+general:
+  # Analysis settings
+  analysis_direction: all  # 'all' or 'out'
+  time_window_width: 3600  # Time window width in seconds (1 hour)
+  
+  # Output directory for logs and alerts
+  output_dir: output
+  
+  # Color output in terminal
+  color_output: true
+
+# Database settings
+database:
+  db_host: localhost
+  db_port: 6379
+  db_name: 0
+  
+  # Redis database cache settings
+  cache_db_name: 1
+  cache_timeout: 86400  # 24 hours
+
+# Logging settings
+logging:
+  level: INFO  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: slips.log
+  dir: logs
+  max_bytes: 10485760  # 10 MB
+  backup_count: 5
+
+# Module settings
+modules:
+  # Modules to enable or disable
+  enabled:
+    - rnn_cc_detection
+    - flow_ml_detection
+    - threat_intelligence
+    - http_analyzer
+    - network_discovery
+    - flowalerts
+  
+  disabled: []
+
+# Input processor settings
+input_processor:
+  # Line processing settings
+  chunk_size: 8192
+  check_interval: 1.0  # seconds
+  
+  # Buffer settings
+  buffer_size: 1000
+
+# Profiler settings
+profiler:
+  # Time window settings
+  timewindow_width: 3600  # 1 hour in seconds
+  
+  # Analysis direction
+  analysis_direction: all  # 'all' or 'out'
+
+# Evidence processor settings
+evidence_processor:
+  # Evidence threshold for generating alerts
+  evidence_threshold: 0.25
+  
+  # Minimum confidence for evidence
+  min_confidence: 0.5
+  
+  # Alert format settings
+  alert_format: json
+
+# RNN C&C Detection module settings
+rnn_cc_detection:
+  # Model settings
+  model_path: models/rnn_model.h5
+  
+  # Detection settings
+  prediction_threshold: 0.7
+  min_confidence: 0.5
+  min_sequence_length: 5
+  
+  # Stratoletter generation settings
+  periodicity_threshold: 0.3
+
+# Flow ML Detection module settings
+flow_ml_detection:
+  # Model settings
+  model_path: models/flow_model.joblib
+  scaler_path: models/flow_scaler.joblib
+  
+  # Mode: 'train' or 'test'
+  mode: test
+  
+  # Detection settings
+  prediction_threshold: 0.7
+  min_confidence: 0.5
+
+# Threat Intelligence module settings
+threat_intelligence:
+  # Feeds configuration file
+  feeds_file: config/threat_intel_feeds.yaml
+  
+  # Update settings
+  update_interval: 86400  # 24 hours
+  
+  # Download directory
+  download_dir: data/threat_intel
+
+# HTTP Analyzer module settings
+http_analyzer:
+  # Detection settings
+  suspicious_user_agents:
+    - httpsend
+    - chm_msdn
+    - pb
+    - jndi
+    - tesseract
+  
+  # Pastebin download threshold (bytes)
+  pastebin_download_threshold: 700
+
+# Network Discovery module settings
+network_discovery:
+  # Scan detection thresholds
+  horizontal_scan_threshold: 5
+  vertical_scan_threshold: 5
+  
+  # Timeout for scan detection (seconds)
+  scan_timeout: 300
+
+# Flow Alerts module settings
+flowalerts:
+  # Connection settings
+  long_connection_threshold: 1500  # seconds
+  
+  # Reconnection settings
+  reconnection_threshold: 5
+  
+  # DGA detection settings
+  dga_threshold: 10
+
+# Blocking settings (if enabled with -p)
+blocking:
+  # Blocking mode: 'drop' or 'reject'
+  mode: drop
+  
+  # Automatic unblocking after timeout
+  unblock_timeout: 3600  # 1 hour in seconds
+  
+  # Maximum number of IPs to block
+  max_blocked_ips: 1000
