@@ -53,6 +53,17 @@ class Database:
             self.redis_client.ping()  # Test connection
             self.logger.info(f"Connected to Redis server on port {self.port}")
             
+            # Disable RDB persistence if causing issues
+            try:
+                # Change configuration to allow writes even if RDB save fails
+                self.redis_client.config_set('stop-writes-on-bgsave-error', 'no')
+                self.logger.info("Set Redis to continue accepting writes even if RDB save fails")
+                
+                # You could also disable RDB persistence entirely if needed
+                # self.redis_client.config_set('save', '')
+            except redis.exceptions.ResponseError as e:
+                self.logger.warning(f"Could not modify Redis configuration: {str(e)}")
+            
         except (redis.ConnectionError, redis.TimeoutError):
             self.logger.info(f"Redis server not running on port {self.port}, starting new instance")
             self._start_redis_server()
@@ -63,8 +74,14 @@ class Database:
     def _start_redis_server(self) -> None:
         """Start a Redis server instance"""
         try:
-            # Start Redis server with configuration
-            cmd = ['redis-server', '--port', str(self.port), '--daemonize', 'yes']
+            # Start Redis server with configuration to avoid persistence issues
+            cmd = [
+                'redis-server', 
+                '--port', str(self.port), 
+                '--daemonize', 'yes',
+                '--save', '""',  # Disable RDB persistence
+                '--stop-writes-on-bgsave-error', 'no'  # Allow writes even if RDB save fails
+            ]
             subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
             # Wait for server to start
