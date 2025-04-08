@@ -10,8 +10,10 @@ import os
 import json
 import time
 import logging
+import datetime
 from typing import Dict, List, Any, Optional
 from multiprocessing.managers import ValueProxy
+from dateutil import parser  # For parsing ISO timestamps
 
 
 class InputProcessor:
@@ -177,17 +179,41 @@ class InputProcessor:
             flow = self._convert_to_flow(event)
             
             if flow:
+                timestamp = flow.get('timestamp', time.time())
+                # Calculate timewindow number
+                tw_number = int(timestamp // 3600)
+                
                 # Publish the flow to Redis
                 self.db.publish('new_flow', {
                     'flow': flow,
-                    'timestamp': flow.get('timestamp', time.time()),
-                    'twid': f"timewindow{int(float(flow.get('timestamp', time.time())) // 3600)}"
+                    'timestamp': timestamp,
+                    'twid': f"timewindow{tw_number}"
                 })
                 
         except json.JSONDecodeError:
             self.logger.warning(f"Invalid JSON line: {line[:100]}...")
         except Exception as e:
             self.logger.error(f"Error processing line: {str(e)}")
+
+    def _parse_timestamp(self, timestamp_str: str) -> float:
+        """
+        Parse a timestamp string into epoch time
+        
+        Args:
+            timestamp_str: Timestamp string (ISO8601 format)
+            
+        Returns:
+            Timestamp as epoch time (seconds since 1970-01-01)
+        """
+        try:
+            # Parse ISO8601 timestamp using dateutil.parser
+            dt = parser.parse(timestamp_str)
+            # Convert to epoch time
+            return dt.timestamp()
+        except Exception as e:
+            self.logger.error(f"Error parsing timestamp '{timestamp_str}': {str(e)}")
+            # Return current time as fallback
+            return time.time()
 
     def _convert_to_flow(self, event: Dict) -> Optional[Dict]:
         """
@@ -204,21 +230,41 @@ class InputProcessor:
             return None
             
         try:
+            # Parse timestamp - handle ISO8601 format
+            timestamp_str = event.get('timestamp', '')
+            if isinstance(timestamp_str, str) and timestamp_str:
+                # Parse ISO8601 timestamp
+                timestamp = self._parse_timestamp(timestamp_str)
+            else:
+                # Use current time as fallback
+                timestamp = time.time()
+                
             # Extract required fields
             flow = {
                 'uid': event.get('flow_id', ''),
                 'id.orig_h': event.get('src_ip'),
-                'id.orig_p': event.get('src_port', 0),
+                'id.orig_p': int(event.get('src_port', 0)),
                 'id.resp_h': event.get('dest_ip'),
-                'id.resp_p': event.get('dest_port', 0),
-                'proto': event.get('proto', '').lower(),
+                'id.resp_p': int(event.get('dest_port', 0)),
+                'proto': str(event.get('proto', '')).lower(),
                 'service': event.get('app_proto', ''),
-                'duration': float(event.get('flow', {}).get('duration', 0)),
-                'orig_bytes': int(event.get('flow', {}).get('bytes_toserver', 0)),
-                'resp_bytes': int(event.get('flow', {}).get('bytes_toclient', 0)),
-                'conn_state': event.get('flow', {}).get('state', ''),
-                'timestamp': float(event.get('timestamp', time.time()))
+                'timestamp': timestamp
             }
+            
+            # Extract flow-specific fields if available
+            if 'flow' in event:
+                flow_details = event['flow']
+                # Use safe conversion with fallbacks
+                flow['duration'] = float(flow_details.get('duration', 0))
+                flow['orig_bytes'] = int(flow_details.get('bytes_toserver', 0))
+                flow['resp_bytes'] = int(flow_details.get('bytes_toclient', 0))
+                flow['conn_state'] = flow_details.get('state', '')
+            else:
+                # Set defaults if no flow details
+                flow['duration'] = 0.0
+                flow['orig_bytes'] = 0
+                flow['resp_bytes'] = 0
+                flow['conn_state'] = ''
             
             # Add additional fields if available
             if 'tcp' in event:
@@ -236,6 +282,10 @@ class InputProcessor:
             
             if flow['conn_state'] in state_map:
                 flow['conn_state'] = state_map[flow['conn_state']]
+                
+            # Add packet counts if available
+            flow['orig_pkts'] = int(event.get('flow', {}).get('pkts_toserver', 0))
+            flow['resp_pkts'] = int(event.get('flow', {}).get('pkts_toclient', 0))
                 
             return flow
             
